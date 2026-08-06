@@ -54,8 +54,8 @@ const jquery = require("jquery");
 const rootDir = resolve(__dirname, './src');
 const buildDir = resolve(__dirname, './build/');
 const archiveDir = resolve(__dirname, './build/archives');
-const serverRoot = process.env.SERVER_ROOT ? process.env.SERVER_ROOT : 'https://templates.accordproject.org';
-const playgroundRoot = 'https://playground.accordproject.org';
+const serverRoot = process.env.SERVER_ROOT ? process.env.SERVER_ROOT.trim() : 'https://templates.accordproject.org';
+const playgroundRoot = process.env.PLAYGROUND_ROOT ? process.env.PLAYGROUND_ROOT.trim() : 'https://playground.accordproject.org';
 const githubRoot = `https://github.dev/accordproject/cicero-template-library/blob/master`;
 
 const ciceroMark = new CiceroMarkTransformer();
@@ -572,16 +572,35 @@ async function templatePageGenerator(templateIndex, templatePath, template) {
     }
 
     // Build a playground.accordproject.org share link. The playground
-    // reads `#data=<lz-compressed JSON>` and expects four string fields.
+    // reads `#data=<lz-compressed JSON>` and expects fields including logicTs.
     const modelCto = template.getModelManager().getModels()
         .filter(m => !m.name.startsWith('@'))
         .map(m => m.content)
         .join('\n\n');
+
+    const logicPath = path.join(templatePath, 'logic', 'logic.ts');
+    let logicTs = fs.existsSync(logicPath) ? fs.readFileSync(logicPath, 'utf8') : '';
+    if (logicTs) {
+        logicTs = logicTs.replace(/from '\.\/generated\//g, "from './");
+        logicTs = logicTs.replace(/events:\s*object\[\];/g, "events: IPaymentObligationEvent[];");
+        if (!logicTs.includes('init(')) {
+            logicTs = logicTs.replace(
+                /(class\s+\w+\s+extends\s+TemplateLogic[^{]*\{)/,
+                '$1\n    async init(data: any): Promise<any> { return { state: {} }; }\n'
+            );
+        }
+    }
+
+    const requestPath = path.join(templatePath, 'request.json');
+    const requestJson = fs.existsSync(requestPath) ? fs.readFileSync(requestPath, 'utf8') : '';
+
     const playgroundPayload = {
         templateMarkdown: grammar,
         modelCto,
         data: sampleInstanceText,
         agreementHtml: '',
+        logicTs,
+        ...(requestJson ? { requestJson } : {}),
     };
     const playgroundURL = `${playgroundRoot}/#data=${LZString.compressToEncodedURIComponent(JSON.stringify(playgroundPayload))}`;
 

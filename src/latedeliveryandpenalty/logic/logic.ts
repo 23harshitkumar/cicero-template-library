@@ -4,7 +4,7 @@ import type { IMonetaryAmount, CurrencyCode } from './generated/org.accordprojec
 
 type LateDeliveryAndPenaltyResult = {
     result: ILateDeliveryAndPenaltyResponse;
-    events: object[];
+    events: IPaymentObligationEvent[];
 };
 
 type DurationUnit = IDuration['unit'];
@@ -36,10 +36,14 @@ function monetary(doubleValue: number, currencyCode: CurrencyCode): IMonetaryAmo
 
 // @ts-ignore TemplateLogic is injected by the runtime
 class LateDeliveryAndPenaltyLogic extends TemplateLogic<ITemplateModel> {
+    async init(data: ITemplateModel): Promise<any> {
+        return { state: {} };
+    }
+
     async trigger(data: ITemplateModel, request: ILateDeliveryAndPenaltyRequest): Promise<LateDeliveryAndPenaltyResult> {
         const now = new Date();
         const agreed = new Date(request.agreedDelivery);
-        const currencyCode = request.goodsValue.currencyCode;
+        const currencyCode = request.goodsValue?.currencyCode || 'USD';
 
         if (agreed >= now) {
             throw new Error('Cannot exercise late delivery before delivery date');
@@ -61,7 +65,7 @@ class LateDeliveryAndPenaltyLogic extends TemplateLogic<ITemplateModel> {
         const diffDays = diffMs / (1000 * 60 * 60 * 24);
         const penaltyDurationDays = durationToDays(data.penaltyDuration);
         const diffRatio = diffDays / penaltyDurationDays;
-        const goodsValue = request.goodsValue.doubleValue;
+        const goodsValue = request.goodsValue?.doubleValue || 0;
         const penalty = diffRatio * (data.penaltyPercentage / 100.0) * goodsValue;
         const cap = (data.capPercentage / 100.0) * goodsValue;
         const capped = Math.min(penalty, cap);
